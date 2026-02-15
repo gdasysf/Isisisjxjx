@@ -25,7 +25,6 @@ os.makedirs(FILES_DIR, exist_ok=True)
 conn = sqlite3.connect('shop.db', check_same_thread=False)
 cursor = conn.cursor()
 
-# Таблица пользователей
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
@@ -38,7 +37,6 @@ CREATE TABLE IF NOT EXISTS users (
 )
 ''')
 
-# Таблица категорий
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,7 +44,6 @@ CREATE TABLE IF NOT EXISTS categories (
 )
 ''')
 
-# Таблица товаров
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,7 +64,6 @@ CREATE TABLE IF NOT EXISTS products (
 )
 ''')
 
-# Таблица платежей
 cursor.execute('''
 CREATE TABLE IF NOT EXISTS payments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -178,9 +174,7 @@ class AddProduct(StatesGroup):
 # ================== КЛАВИАТУРЫ ==================
 def main_menu_keyboard(user_id):
     keyboard = InlineKeyboardMarkup(row_width=2)
-    keyboard.row(
-        InlineKeyboardButton("📁 Категории", callback_data="categories_page_1"),
-    )
+    keyboard.row(InlineKeyboardButton("📁 Категории", callback_data="categories_page_1"))
     keyboard.row(InlineKeyboardButton("💬 Поддержка", callback_data="support"))
     if is_admin(user_id):
         keyboard.row(InlineKeyboardButton("⚙️ Админ панель", callback_data="admin_panel"))
@@ -852,7 +846,7 @@ async def add_product_file(message: types.Message, state: FSMContext):
     await message.reply("✅ Товар успешно добавлен!")
     await state.finish()
 
-# ================== СПИСОК ТОВАРОВ (АДМИНКА) ==================
+# ================== СПИСОК ТОВАРОВ (АДМИНКА) С ТЕСТОВОЙ ВЫДАЧЕЙ ==================
 @dp.callback_query_handler(lambda c: c.data.startswith('admin_products_page_'))
 async def admin_products_list(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
@@ -880,13 +874,16 @@ async def admin_products_list(callback_query: types.CallbackQuery):
     page_prods = products[start:end]
 
     text = f"📦 Список товаров (страница {page}/{total_pages}):\n\n"
-    keyboard = InlineKeyboardMarkup(row_width=1)
+    keyboard = InlineKeyboardMarkup(row_width=2)
     for pid, pname, cat_id in page_prods:
         cursor.execute('SELECT name FROM categories WHERE id = ?', (cat_id,))
         cat_name = cursor.fetchone()
         cat_name = cat_name[0] if cat_name else "Без категории"
         text += f"ID {pid}: {pname} (категория: {cat_name})\n"
-        keyboard.add(InlineKeyboardButton(f"❌ Удалить {pname}", callback_data=f"admin_del_prod_{pid}"))
+        keyboard.add(
+            InlineKeyboardButton(f"❌ Удалить", callback_data=f"admin_del_prod_{pid}"),
+            InlineKeyboardButton(f"📤 Тест", callback_data=f"admin_test_prod_{pid}")
+        )
 
     nav_buttons = []
     if page > 1:
@@ -904,6 +901,34 @@ async def admin_products_list(callback_query: types.CallbackQuery):
         reply_markup=keyboard
     )
 
+# ================== ТЕСТОВАЯ ВЫДАЧА ТОВАРА ДЛЯ АДМИНА ==================
+@dp.callback_query_handler(lambda c: c.data.startswith('admin_test_prod_'))
+async def admin_test_product(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    if not is_admin(user_id):
+        await bot.answer_callback_query(callback_query.id, "⛔ Нет прав.")
+        return
+
+    prod_id = int(callback_query.data.split('_')[-1])
+    cursor.execute('SELECT file_path, name FROM products WHERE id = ?', (prod_id,))
+    res = cursor.fetchone()
+    if not res:
+        await bot.answer_callback_query(callback_query.id, "❌ Товар не найден.")
+        return
+    file_path, prod_name = res
+
+    if os.path.exists(file_path):
+        with open(file_path, 'rb') as f:
+            await bot.send_document(
+                user_id,
+                f,
+                caption=f"🧪 Тестовая выдача товара:\n\n{prod_name}"
+            )
+        await bot.answer_callback_query(callback_query.id, "✅ Тестовый файл отправлен.")
+    else:
+        await bot.answer_callback_query(callback_query.id, "❌ Файл товара не найден.")
+
+# ================== УДАЛЕНИЕ ТОВАРА (АДМИНКА) ==================
 @dp.callback_query_handler(lambda c: c.data.startswith('admin_del_prod_'))
 async def admin_delete_product(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
