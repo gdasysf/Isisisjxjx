@@ -223,7 +223,7 @@ async def start(message: types.Message):
     first_name = message.from_user.first_name or "пользователь"
     welcome_text = (f"👋 Добро пожаловать, {first_name}!\n"
                     f"Создатель этого бота: @ponevsky\n"
-                    f"Приятного времяпрепровождения в Nevsky Shop!")
+                    f"Приятного время провождения в Nevsky Shop!")
 
     if os.path.exists(WELCOME_IMAGE):
         with open(WELCOME_IMAGE, 'rb') as photo:
