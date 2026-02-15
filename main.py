@@ -192,6 +192,10 @@ class AddProduct(StatesGroup):
 # ================== КЛАВИАТУРЫ ==================
 def main_menu_keyboard(user_id):
     keyboard = InlineKeyboardMarkup(row_width=2)
+    keyboard.row(
+        InlineKeyboardButton("👤 Мой профиль", callback_data="my_profile"),
+        InlineKeyboardButton("📢 Канал", url="https://t.me/nevsky_chanel")
+    )
     keyboard.row(InlineKeyboardButton("📁 Категории", callback_data="categories_page_1"))
     keyboard.row(InlineKeyboardButton("💬 Поддержка", callback_data="support"))
     if is_admin(user_id):
@@ -241,6 +245,57 @@ async def back_to_main(callback_query: types.CallbackQuery):
 
     await bot.answer_callback_query(callback_query.id)
     await start(callback_query.message)
+
+# ================== МОЙ ПРОФИЛЬ ==================
+@dp.callback_query_handler(lambda c: c.data == 'my_profile')
+async def my_profile(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    if is_blocked(user_id):
+        await bot.answer_callback_query(callback_query.id, "⛔ Вы заблокированы.")
+        return
+
+    # Получаем данные пользователя
+    cursor.execute('''
+        SELECT id, username, first_name, last_name, is_blocked, registered_at
+        FROM users WHERE id = ?
+    ''', (user_id,))
+    user = cursor.fetchone()
+    if not user:
+        await bot.answer_callback_query(callback_query.id, "❌ Профиль не найден.")
+        return
+
+    # Считаем количество покупок
+    cursor.execute('''
+        SELECT COUNT(*) FROM payments WHERE user_id = ? AND status = 'paid'
+    ''', (user_id,))
+    purchases = cursor.fetchone()[0]
+
+    # Формируем текст
+    uid, username, first_name, last_name, blocked, reg_date = user
+    status = "🔴 Заблокирован" if blocked else "🟢 Активен"
+    name = f"{first_name or ''} {last_name or ''}".strip() or "Не указано"
+    username_display = f"@{username}" if username else "Не указан"
+
+    profile_text = (
+        f"👤 <b>Ваш профиль</b>\n\n"
+        f"🆔 ID: <code>{uid}</code>\n"
+        f"📛 Имя: {name}\n"
+        f"📱 Username: {username_display}\n"
+        f"📅 Дата регистрации: {reg_date}\n"
+        f"🔒 Статус: {status}\n"
+        f"🛒 Куплено товаров: {purchases}"
+    )
+
+    keyboard = InlineKeyboardMarkup().add(
+        InlineKeyboardButton("⬅️ На главную", callback_data="back_to_main")
+    )
+
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(
+        callback_query.from_user.id,
+        profile_text,
+        reply_markup=keyboard
+    )
 
 # ================== КАТЕГОРИИ И ТОВАРЫ (ПОЛЬЗОВАТЕЛЬСКАЯ ЧАСТЬ) ==================
 @dp.callback_query_handler(lambda c: c.data.startswith('categories_page_'))
@@ -682,7 +737,7 @@ async def process_category_name(message: types.Message, state: FSMContext):
     finally:
         await state.finish()
 
-# ================== ДОБАВЛЕНИЕ ТОВАРА ==================
+# ================== ДОБАВЛЕНИЕ ТОВАРА (ПОЛНЫЙ FSM) ==================
 @dp.callback_query_handler(lambda c: c.data == 'admin_add_product')
 async def admin_add_product_start(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
@@ -720,9 +775,136 @@ async def admin_add_product_category(callback_query: types.CallbackQuery, state:
     await bot.send_message(callback_query.from_user.id, "Введите название товара:")
     await AddProduct.name.set()
 
-# ... (остальные шаги добавления товара без изменений, они используют send_message, поэтому безопасны)
-# Для краткости я пропущу их, но они должны остаться такими же, как в предыдущей версии.
-# В реальном коде нужно вставить все обработчики для цен и файла.
+@dp.message_handler(state=AddProduct.name)
+async def process_product_name(message: types.Message, state: FSMContext):
+    await state.update_data(name=message.text.strip())
+    await bot.send_message(message.chat.id, "Введите описание товара:")
+    await AddProduct.description.set()
+
+@dp.message_handler(state=AddProduct.description)
+async def process_product_description(message: types.Message, state: FSMContext):
+    await state.update_data(description=message.text.strip())
+    await bot.send_message(message.chat.id, "Введите цену в TON (или 0, если не доступно):")
+    await AddProduct.price_ton.set()
+
+@dp.message_handler(state=AddProduct.price_ton)
+async def process_price_ton(message: types.Message, state: FSMContext):
+    try:
+        price = float(message.text.replace(',', '.'))
+        await state.update_data(price_ton=price)
+        await bot.send_message(message.chat.id, "Введите цену в BTC (или 0):")
+        await AddProduct.price_btc.set()
+    except ValueError:
+        await bot.send_message(message.chat.id, "Пожалуйста, введите число.")
+
+@dp.message_handler(state=AddProduct.price_btc)
+async def process_price_btc(message: types.Message, state: FSMContext):
+    try:
+        price = float(message.text.replace(',', '.'))
+        await state.update_data(price_btc=price)
+        await bot.send_message(message.chat.id, "Введите цену в ETH (или 0):")
+        await AddProduct.price_eth.set()
+    except ValueError:
+        await bot.send_message(message.chat.id, "Пожалуйста, введите число.")
+
+@dp.message_handler(state=AddProduct.price_eth)
+async def process_price_eth(message: types.Message, state: FSMContext):
+    try:
+        price = float(message.text.replace(',', '.'))
+        await state.update_data(price_eth=price)
+        await bot.send_message(message.chat.id, "Введите цену в USDT (или 0):")
+        await AddProduct.price_usdt.set()
+    except ValueError:
+        await bot.send_message(message.chat.id, "Пожалуйста, введите число.")
+
+@dp.message_handler(state=AddProduct.price_usdt)
+async def process_price_usdt(message: types.Message, state: FSMContext):
+    try:
+        price = float(message.text.replace(',', '.'))
+        await state.update_data(price_usdt=price)
+        await bot.send_message(message.chat.id, "Введите цену в BNB (или 0):")
+        await AddProduct.price_bnb.set()
+    except ValueError:
+        await bot.send_message(message.chat.id, "Пожалуйста, введите число.")
+
+@dp.message_handler(state=AddProduct.price_bnb)
+async def process_price_bnb(message: types.Message, state: FSMContext):
+    try:
+        price = float(message.text.replace(',', '.'))
+        await state.update_data(price_bnb=price)
+        await bot.send_message(message.chat.id, "Введите цену в LTC (или 0):")
+        await AddProduct.price_ltc.set()
+    except ValueError:
+        await bot.send_message(message.chat.id, "Пожалуйста, введите число.")
+
+@dp.message_handler(state=AddProduct.price_ltc)
+async def process_price_ltc(message: types.Message, state: FSMContext):
+    try:
+        price = float(message.text.replace(',', '.'))
+        await state.update_data(price_ltc=price)
+        await bot.send_message(message.chat.id, "Введите цену в DOGE (или 0):")
+        await AddProduct.price_doge.set()
+    except ValueError:
+        await bot.send_message(message.chat.id, "Пожалуйста, введите число.")
+
+@dp.message_handler(state=AddProduct.price_doge)
+async def process_price_doge(message: types.Message, state: FSMContext):
+    try:
+        price = float(message.text.replace(',', '.'))
+        await state.update_data(price_doge=price)
+        await bot.send_message(message.chat.id, "Введите цену в TRX (или 0):")
+        await AddProduct.price_trx.set()
+    except ValueError:
+        await bot.send_message(message.chat.id, "Пожалуйста, введите число.")
+
+@dp.message_handler(state=AddProduct.price_trx)
+async def process_price_trx(message: types.Message, state: FSMContext):
+    try:
+        price = float(message.text.replace(',', '.'))
+        await state.update_data(price_trx=price)
+        await bot.send_message(message.chat.id, "Введите цену в NOT (или 0):")
+        await AddProduct.price_not.set()
+    except ValueError:
+        await bot.send_message(message.chat.id, "Пожалуйста, введите число.")
+
+@dp.message_handler(state=AddProduct.price_not)
+async def process_price_not(message: types.Message, state: FSMContext):
+    try:
+        price = float(message.text.replace(',', '.'))
+        await state.update_data(price_not=price)
+        await bot.send_message(message.chat.id, "Теперь загрузите файл товара:")
+        await AddProduct.file.set()
+    except ValueError:
+        await bot.send_message(message.chat.id, "Пожалуйста, введите число.")
+
+@dp.message_handler(content_types=['document'], state=AddProduct.file)
+async def process_product_file(message: types.Message, state: FSMContext):
+    document = message.document
+    file_id = document.file_id
+    file_name = document.file_name
+    # Сохраняем файл на диск
+    file_path = os.path.join(FILES_DIR, f"{file_id}_{file_name}")
+    await bot.download_file_by_id(file_id, destination=file_path)
+
+    data = await state.get_data()
+    cursor.execute('''
+        INSERT INTO products 
+        (category_id, name, description, price_ton, price_btc, price_eth, price_usdt,
+         price_bnb, price_ltc, price_doge, price_trx, price_not, file_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        data['category_id'], data['name'], data['description'],
+        data['price_ton'], data['price_btc'], data['price_eth'], data['price_usdt'],
+        data['price_bnb'], data['price_ltc'], data['price_doge'], data['price_trx'], data['price_not'],
+        file_path
+    ))
+    conn.commit()
+    await state.finish()
+    await message.reply("✅ Товар успешно добавлен!")
+
+@dp.message_handler(state=AddProduct.file)
+async def process_file_invalid(message: types.Message):
+    await message.reply("Пожалуйста, загрузите файл в виде документа.")
 
 # ================== СПИСОК ТОВАРОВ (АДМИНКА) С ТЕСТОВОЙ ВЫДАЧЕЙ ==================
 @dp.callback_query_handler(lambda c: c.data.startswith('admin_products_page_'))
