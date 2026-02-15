@@ -236,12 +236,7 @@ async def show_categories(callback_query: types.CallbackQuery):
     cursor.execute('SELECT id, name FROM categories ORDER BY name')
     categories = cursor.fetchall()
     if not categories:
-        await bot.edit_message_text(
-            chat_id=callback_query.message.chat.id,
-            message_id=callback_query.message.message_id,
-            text="📂 Категории пока пусты.",
-            reply_markup=back_to_main_button()
-        )
+        await bot.answer_callback_query(callback_query.id, "📂 Категории пока пусты.")
         return
 
     per_page = 5
@@ -263,10 +258,10 @@ async def show_categories(callback_query: types.CallbackQuery):
         keyboard.row(*nav_buttons)
     keyboard.row(InlineKeyboardButton("⬅️ На главную", callback_data="back_to_main"))
 
-    await bot.edit_message_text(
-        chat_id=callback_query.message.chat.id,
-        message_id=callback_query.message.message_id,
-        text="📂 Выберите категорию:",
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(
+        callback_query.from_user.id,
+        "📂 Выберите категорию:",
         reply_markup=keyboard
     )
 
@@ -307,10 +302,10 @@ async def show_products(callback_query: types.CallbackQuery):
         keyboard.row(*nav_buttons)
     keyboard.row(InlineKeyboardButton("⬅️ К категориям", callback_data="categories_page_1"))
 
-    await bot.edit_message_text(
-        chat_id=callback_query.message.chat.id,
-        message_id=callback_query.message.message_id,
-        text="📦 Выберите товар:",
+    await bot.answer_callback_query(callback_query.id)
+    await bot.send_message(
+        callback_query.from_user.id,
+        "📦 Выберите товар:",
         reply_markup=keyboard
     )
 
