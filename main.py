@@ -11,7 +11,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 
 # ================== НАСТРОЙКИ ==================
-TELEGRAM_BOT_TOKEN = '8107230002:AAEWIQiPbgL4lXJ6eeYwrOA3-jFYDQeuV04'
+TELEGRAM_BOT_TOKEN = '8107230002:AAGcmB-1ueHFVGPWTv4pQxckYd6XjV6GGxI'
 CRYPTO_BOT_TOKEN = '509179:AAHycIbTUPLk87WcaOiTFob9mvNQ3FmEZT6'
 ADMIN_IDS = [5459547413]
 
