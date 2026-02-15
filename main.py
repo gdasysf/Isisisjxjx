@@ -174,10 +174,7 @@ class AddProduct(StatesGroup):
 # ================== КЛАВИАТУРЫ ==================
 def main_menu_keyboard(user_id):
     keyboard = InlineKeyboardMarkup(row_width=2)
-    keyboard.row(
-        InlineKeyboardButton("📁 Категории", callback_data="categories_page_1"),
-        InlineKeyboardButton("📢 Канал", url="https://t.me/nevsky_chanel")  # ← ссылка изменена
-    )
+    keyboard.row(InlineKeyboardButton("📁 Категории", callback_data="categories_page_1"))
     keyboard.row(InlineKeyboardButton("💬 Поддержка", callback_data="support"))
     if is_admin(user_id):
         keyboard.row(InlineKeyboardButton("⚙️ Админ панель", callback_data="admin_panel"))
